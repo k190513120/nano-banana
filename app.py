@@ -9,6 +9,10 @@ from typing import Optional
 
 app = FastAPI()
 
+# Version for deployment tracking
+VERSION = "1.0.2"
+print(f"Starting application version {VERSION}")
+
 # Configuration
 # Default to the key provided by user if not in env
 DEFAULT_API_KEY = "AIzaSyDvYLrM4Y_J8d0FMaaOx3rWi9RhTgA0e68"
