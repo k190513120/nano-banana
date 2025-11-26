@@ -10,7 +10,7 @@ from typing import Optional
 app = FastAPI()
 
 # Version for deployment tracking
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 print(f"Starting application version {VERSION}")
 
 # Configuration
@@ -149,11 +149,22 @@ async def generate_image_endpoint(request: GenerateRequest):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "version": VERSION}
+    # Check if we are running with a custom env key
+    env_key = os.getenv("GEMINI_API_KEY")
+    has_env_key = bool(env_key and env_key.strip())
+    return {"status": "ok", "version": VERSION, "has_custom_key": has_env_key}
 
 @app.get("/")
 def root():
-    return {"message": "Service is running", "version": VERSION}
+    # Check if we are running with a custom env key
+    env_key = os.getenv("GEMINI_API_KEY")
+    has_env_key = bool(env_key and env_key.strip())
+    return {
+        "message": "Service is running", 
+        "version": VERSION, 
+        "has_custom_key": has_env_key,
+        "note": "Please set GEMINI_API_KEY in Koyeb Environment Variables if has_custom_key is false"
+    }
 
 if __name__ == "__main__":
     import uvicorn
