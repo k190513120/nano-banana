@@ -10,12 +10,12 @@ from typing import Optional
 app = FastAPI()
 
 # Version for deployment tracking
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 print(f"Starting application version {VERSION}")
 
 # Configuration
 # Default to the key provided by user if not in env
-DEFAULT_API_KEY = "AIzaSyDvYLrM4Y_J8d0FMaaOx3rWi9RhTgA0e68"
+DEFAULT_API_KEY = "AIzaSyCx6EcRyotOEa-4XFSkEZ6FZD3fKi6apCI"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", DEFAULT_API_KEY)
 
 # Map user friendly model names to actual API models if needed
