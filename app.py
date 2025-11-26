@@ -125,6 +125,10 @@ async def generate_image_endpoint(request: GenerateRequest):
 def health_check():
     return {"status": "ok"}
 
+@app.get("/")
+def root():
+    return {"message": "Service is running. Use /generate to generate images."}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
