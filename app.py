@@ -136,11 +136,11 @@ async def generate_image_endpoint(request: GenerateRequest):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "version": VERSION}
 
 @app.get("/")
 def root():
-    return {"message": "Service is running. Use /generate to generate images."}
+    return {"message": "Service is running", "version": VERSION}
 
 if __name__ == "__main__":
     import uvicorn
