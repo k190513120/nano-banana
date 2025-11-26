@@ -56,8 +56,13 @@ async def generate_image_endpoint(request: GenerateRequest):
     """
     Generate image using Google Gemini API
     """
-    api_model = MODEL_MAPPING.get(request.model, MODEL_MAPPING["default"])
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
+    # Configuration
+    # Default to the key provided by user if not in env
+    DEFAULT_API_KEY = "AIzaSyDvYLrM4Y_J8d0FMaaOx3rWi9RhTgA0e68"
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", DEFAULT_API_KEY)
+    
+    # 强制打印一下Key的前几位，方便在Koyeb日志里确认
+    print(f"Loaded GEMINI_API_KEY: {GEMINI_API_KEY[:5]}***")
     
     headers = {
         "x-goog-api-key": GEMINI_API_KEY,
