@@ -10,7 +10,7 @@ from typing import Optional
 app = FastAPI()
 
 # Version for deployment tracking
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 print(f"Starting application version {VERSION}")
 
 # Configuration
@@ -68,6 +68,9 @@ async def generate_image_endpoint(request: GenerateRequest):
     # 强制打印一下Key的前几位，方便在Koyeb日志里确认
     print(f"Loaded GEMINI_API_KEY: {GEMINI_API_KEY[:5]}***")
     
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Server Configuration Error: GEMINI_API_KEY is not set.")
+
     # Define model and URL
     api_model = MODEL_MAPPING.get(request.model, "gemini-3-pro-image-preview")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
@@ -108,7 +111,9 @@ async def generate_image_endpoint(request: GenerateRequest):
         if not response.ok:
             error_detail = response.text
             print(f"Gemini API Error: {error_detail}")
-            raise HTTPException(status_code=response.status_code, detail=f"Gemini API Error: {error_detail}")
+            # Include key prefix in error for debugging (be careful with this in production!)
+            key_debug = f"Key starts with: {GEMINI_API_KEY[:5]}..." if GEMINI_API_KEY else "Key is empty"
+            raise HTTPException(status_code=response.status_code, detail=f"Gemini API Error: {error_detail}. Debug info: {key_debug}")
             
         data = response.json()
         
