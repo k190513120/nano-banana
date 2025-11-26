@@ -2,49 +2,51 @@ import os
 import base64
 import json
 import requests
+import zlib
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional
 
 app = FastAPI()
 
 # Version for deployment tracking
-VERSION = "1.0.6"
+VERSION = "1.1.0"
 print(f"Starting application version {VERSION}")
 
 # Configuration
-# Default to the key provided by user if not in env
+# Google Gemini API Key
 DEFAULT_API_KEY = "AIzaSyCx6EcRyotOEa-4XFSkEZ6FZD3fKi6apCI"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", DEFAULT_API_KEY)
 
+# Feishu Configuration
+FEISHU_APP_ID = "cli_a757be749210500e"
+FEISHU_APP_SECRET = "EvAyrNVzqxV7Wp3gET8oA5tjAt1T5ZfJ"
+UPLOAD_PARENT_TOKEN = "WPE1bppuGaTSwTss9sZcDg1vnjh"
+UPLOAD_PARENT_TYPE = "bitable_image"
+
 # Map user friendly model names to actual API models if needed
-# Currently both map to gemini-3-pro-image-preview as that's what we have
 MODEL_MAPPING = {
     "nano banana1": "gemini-3-pro-image-preview",
-    "nano banana2": "gemini-3-pro-image-preview", # Assuming same for now
+    "nano banana2": "gemini-3-pro-image-preview", 
     "default": "gemini-3-pro-image-preview"
 }
 
 class GenerateRequest(BaseModel):
     aspectRatio: str = "1:1"
-    imageSize: str = "1K"  # Corresponds to 'clarity'
+    imageSize: str = "1K" 
     imageUrl: Optional[str] = None
     prompt: str
     model: str = "nano banana1"
 
 def download_image_as_base64(url: str):
-    """
-    Download image from URL and convert to base64 inlineData format
-    """
+    """Download image from URL and convert to base64 inlineData format"""
     try:
         resp = requests.get(url, timeout=30)
         resp.raise_for_status()
         
         content_type = resp.headers.get("Content-Type", "image/jpeg")
-        # Ensure compatible mime type (image/jpeg, image/png, image/webp)
         if "image" not in content_type:
-            content_type = "image/jpeg" # Fallback
+            content_type = "image/jpeg"
             
         b64_data = base64.b64encode(resp.content).decode("utf-8")
         return {
@@ -55,13 +57,75 @@ def download_image_as_base64(url: str):
         print(f"Failed to download image from {url}: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to download input image: {str(e)}")
 
+def get_feishu_token():
+    """Get Feishu tenant_access_token"""
+    url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+    headers = {"Content-Type": "application/json; charset=utf-8"}
+    payload = {
+        "app_id": FEISHU_APP_ID,
+        "app_secret": FEISHU_APP_SECRET
+    }
+    
+    print("Getting Feishu Access Token...")
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json().get("tenant_access_token")
+    except Exception as e:
+        print(f"Failed to get Feishu token: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get Feishu token: {str(e)}")
+
+def upload_to_feishu(token, filename, file_bytes):
+    """Upload image to Feishu"""
+    url = "https://open.feishu.cn/open-apis/drive/v1/medias/upload_all"
+    
+    file_size = len(file_bytes)
+    checksum = zlib.adler32(file_bytes) & 0xffffffff
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    form_data = {
+        "file_name": filename,
+        "parent_type": UPLOAD_PARENT_TYPE,
+        "parent_node": UPLOAD_PARENT_TOKEN,
+        "size": str(file_size),
+        "checksum": str(checksum)
+    }
+    
+    files = {
+        "file": (filename, file_bytes, "image/png")
+    }
+
+    print(f"Uploading image to Feishu (Type: {UPLOAD_PARENT_TYPE})...")
+    try:
+        response = requests.post(url, headers=headers, data=form_data, files=files)
+        if not response.ok:
+            print(f"Upload failed Status: {response.status_code}, Body: {response.text}")
+            response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Feishu upload failed: {str(e)}")
+
+def get_temp_download_url(token, file_token):
+    """Get temporary download URL from Feishu"""
+    url = "https://open.feishu.cn/open-apis/drive/v1/medias/batch_get_tmp_download_url"
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"file_tokens": file_token}
+    
+    print(f"Getting temp download URL (File Token: {file_token})...")
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Get download URL failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get download URL: {str(e)}")
+
 @app.post("/generate")
 async def generate_image_endpoint(request: GenerateRequest):
-    """
-    Generate image using Google Gemini API
-    """
+    """Generate image using Google Gemini API and upload to Feishu"""
     # Configuration
-    # Default to the key provided by user if not in env
     DEFAULT_API_KEY = "AIzaSyDvYLrM4Y_J8d0FMaaOx3rWi9RhTgA0e68"
     env_key = os.getenv("GEMINI_API_KEY")
     using_default = False
@@ -70,9 +134,8 @@ async def generate_image_endpoint(request: GenerateRequest):
         GEMINI_API_KEY = DEFAULT_API_KEY
         using_default = True
     else:
-        GEMINI_API_KEY = env_key.strip() # Remove any whitespace/newlines
+        GEMINI_API_KEY = env_key.strip()
         
-    # 强制打印一下Key的前几位，方便在Koyeb日志里确认
     source_str = "DEFAULT" if using_default else "ENV"
     print(f"Loaded GEMINI_API_KEY from {source_str}: {GEMINI_API_KEY[:5]}***")
     
@@ -90,8 +153,6 @@ async def generate_image_endpoint(request: GenerateRequest):
     
     # Construct parts
     parts = []
-    
-    # If image URL is provided, add it to parts for multimodal input (usually image first context)
     if request.imageUrl:
         image_data = download_image_as_base64(request.imageUrl)
         parts.append({"inlineData": image_data})
@@ -100,7 +161,7 @@ async def generate_image_endpoint(request: GenerateRequest):
     
     payload = {
         "contents": [{"parts": parts}],
-        "tools": [{"google_search": {}}], # Keep google_search as in original script
+        "tools": [{"google_search": {}}],
         "generationConfig": {
             "responseModalities": ["TEXT", "IMAGE"],
             "imageConfig": {
@@ -113,13 +174,11 @@ async def generate_image_endpoint(request: GenerateRequest):
     print(f"Requesting Gemini ({api_model})...")
     
     try:
-        # No proxy for cloud deployment usually
         response = requests.post(url, headers=headers, json=payload)
         
         if not response.ok:
             error_detail = response.text
             print(f"Gemini API Error: {error_detail}")
-            # Include key prefix in error for debugging (be careful with this in production!)
             key_debug = f"Key starts with: {GEMINI_API_KEY[:5]}... (Source: {source_str})" if GEMINI_API_KEY else "Key is empty"
             raise HTTPException(status_code=response.status_code, detail=f"Gemini API Error: {error_detail}. Debug info: {key_debug}")
             
@@ -139,7 +198,37 @@ async def generate_image_endpoint(request: GenerateRequest):
         b64_data = image_part["inlineData"]["data"]
         image_bytes = base64.b64decode(b64_data)
         
-        return Response(content=image_bytes, media_type="image/png")
+        # --- Feishu Upload Logic ---
+        
+        # 1. Get Feishu Token
+        feishu_token = get_feishu_token()
+        
+        # 2. Upload Image
+        filename = "generated_image.png"
+        upload_result = upload_to_feishu(feishu_token, filename, image_bytes)
+        
+        if upload_result.get("code") != 0:
+            raise HTTPException(status_code=500, detail=f"Feishu upload failed: {json.dumps(upload_result)}")
+            
+        file_token = upload_result.get("data", {}).get("file_token")
+        
+        # 3. Get Download Link
+        url_result = get_temp_download_url(feishu_token, file_token)
+        
+        if url_result.get("code") != 0:
+            raise HTTPException(status_code=500, detail=f"Feishu download URL failed: {json.dumps(url_result)}")
+            
+        tmp_urls = url_result.get("data", {}).get("tmp_download_urls", [])
+        if not tmp_urls:
+            raise HTTPException(status_code=500, detail="No download URL returned from Feishu")
+            
+        download_url = tmp_urls[0].get("tmp_download_url")
+        
+        return {
+            "status": "success",
+            "download_url": download_url,
+            "file_token": file_token
+        }
         
     except HTTPException:
         raise
