@@ -10,7 +10,7 @@ from typing import Optional
 app = FastAPI()
 
 # Version for deployment tracking
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 print(f"Starting application version {VERSION}")
 
 # Configuration
@@ -63,10 +63,18 @@ async def generate_image_endpoint(request: GenerateRequest):
     # Configuration
     # Default to the key provided by user if not in env
     DEFAULT_API_KEY = "AIzaSyDvYLrM4Y_J8d0FMaaOx3rWi9RhTgA0e68"
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", DEFAULT_API_KEY)
+    env_key = os.getenv("GEMINI_API_KEY")
+    using_default = False
     
+    if not env_key:
+        GEMINI_API_KEY = DEFAULT_API_KEY
+        using_default = True
+    else:
+        GEMINI_API_KEY = env_key.strip() # Remove any whitespace/newlines
+        
     # 强制打印一下Key的前几位，方便在Koyeb日志里确认
-    print(f"Loaded GEMINI_API_KEY: {GEMINI_API_KEY[:5]}***")
+    source_str = "DEFAULT" if using_default else "ENV"
+    print(f"Loaded GEMINI_API_KEY from {source_str}: {GEMINI_API_KEY[:5]}***")
     
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="Server Configuration Error: GEMINI_API_KEY is not set.")
@@ -112,7 +120,7 @@ async def generate_image_endpoint(request: GenerateRequest):
             error_detail = response.text
             print(f"Gemini API Error: {error_detail}")
             # Include key prefix in error for debugging (be careful with this in production!)
-            key_debug = f"Key starts with: {GEMINI_API_KEY[:5]}..." if GEMINI_API_KEY else "Key is empty"
+            key_debug = f"Key starts with: {GEMINI_API_KEY[:5]}... (Source: {source_str})" if GEMINI_API_KEY else "Key is empty"
             raise HTTPException(status_code=response.status_code, detail=f"Gemini API Error: {error_detail}. Debug info: {key_debug}")
             
         data = response.json()
