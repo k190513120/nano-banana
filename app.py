@@ -10,7 +10,7 @@ from typing import Optional
 app = FastAPI()
 
 # Version for deployment tracking
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 print(f"Starting application version {VERSION}")
 
 # Configuration
@@ -159,14 +159,17 @@ async def generate_image_endpoint(request: GenerateRequest):
         
     parts.append({"text": request.prompt})
     
+    # Handle optional parameters with defaults if empty
+    aspect_ratio = request.aspectRatio if request.aspectRatio else "1:1"
+    image_size = request.imageSize if request.imageSize else "1K"
+
     payload = {
         "contents": [{"parts": parts}],
-        "tools": [{"google_search": {}}],
         "generationConfig": {
-            "responseModalities": ["TEXT", "IMAGE"],
+            "responseModalities": ["IMAGE"],
             "imageConfig": {
-                "aspectRatio": request.aspectRatio,
-                "imageSize": request.imageSize
+                "aspectRatio": aspect_ratio,
+                "imageSize": image_size
             }
         }
     }
