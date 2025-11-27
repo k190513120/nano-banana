@@ -3,6 +3,7 @@ import base64
 import json
 import requests
 import zlib
+import time
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -32,9 +33,12 @@ MODEL_MAPPING = {
 }
 
 class GenerateRequest(BaseModel):
-    aspectRatio: str = "1:1"
-    imageSize: str = "1K" 
+    aspectRatio: Optional[str] = "1:1"
+    aspect_ratio: Optional[str] = None
+    imageSize: Optional[str] = "1K"
+    image_size: Optional[str] = None
     imageUrl: Optional[str] = None
+    image: Optional[str] = None
     prompt: str
     model: str = "nano banana1"
 
@@ -151,25 +155,34 @@ async def generate_image_endpoint(request: GenerateRequest):
         "Content-Type": "application/json"
     }
     
+    # Timing
+    t_start = time.time()
+    
     # Construct parts
     parts = []
-    if request.imageUrl:
-        image_data = download_image_as_base64(request.imageUrl)
+    
+    # Normalize input fields (support snake_case aliases)
+    final_image_url = request.imageUrl or request.image
+    final_aspect_ratio = request.aspectRatio or request.aspect_ratio or "1:1"
+    final_image_size = request.imageSize or request.image_size or "1K"
+    
+    if final_image_url:
+        print(f"Downloading image from {final_image_url[:30]}...")
+        image_data = download_image_as_base64(final_image_url)
         parts.append({"inlineData": image_data})
+        
+    t_download = time.time()
+    print(f"[Timing] Image Download: {t_download - t_start:.2f}s")
         
     parts.append({"text": request.prompt})
     
-    # Handle optional parameters with defaults if empty
-    aspect_ratio = request.aspectRatio if request.aspectRatio else "1:1"
-    image_size = request.imageSize if request.imageSize else "1K"
-
     payload = {
         "contents": [{"parts": parts}],
         "generationConfig": {
             "responseModalities": ["IMAGE"],
             "imageConfig": {
-                "aspectRatio": aspect_ratio,
-                "imageSize": image_size
+                "aspectRatio": final_aspect_ratio,
+                "imageSize": final_image_size
             }
         }
     }
@@ -178,6 +191,9 @@ async def generate_image_endpoint(request: GenerateRequest):
     
     try:
         response = requests.post(url, headers=headers, json=payload)
+        
+        t_gemini = time.time()
+        print(f"[Timing] Gemini Generation: {t_gemini - t_download:.2f}s")
         
         if not response.ok:
             error_detail = response.text
@@ -205,10 +221,15 @@ async def generate_image_endpoint(request: GenerateRequest):
         
         # 1. Get Feishu Token
         feishu_token = get_feishu_token()
+        t_token = time.time()
+        print(f"[Timing] Get Feishu Token: {t_token - t_gemini:.2f}s")
         
         # 2. Upload Image
         filename = "generated_image.png"
         upload_result = upload_to_feishu(feishu_token, filename, image_bytes)
+        
+        t_upload = time.time()
+        print(f"[Timing] Upload to Feishu: {t_upload - t_token:.2f}s")
         
         if upload_result.get("code") != 0:
             raise HTTPException(status_code=500, detail=f"Feishu upload failed: {json.dumps(upload_result)}")
@@ -217,6 +238,10 @@ async def generate_image_endpoint(request: GenerateRequest):
         
         # 3. Get Download Link
         url_result = get_temp_download_url(feishu_token, file_token)
+        
+        t_url = time.time()
+        print(f"[Timing] Get Download URL: {t_url - t_upload:.2f}s")
+        print(f"[Timing] Total Duration: {t_url - t_start:.2f}s")
         
         if url_result.get("code") != 0:
             raise HTTPException(status_code=500, detail=f"Feishu download URL failed: {json.dumps(url_result)}")
