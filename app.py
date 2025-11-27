@@ -255,7 +255,15 @@ async def generate_image_endpoint(request: GenerateRequest):
         return {
             "status": "success",
             "download_url": download_url,
-            "file_token": file_token
+            "file_token": file_token,
+            "timing": {
+                "download_image": f"{t_download - t_start:.2f}s",
+                "gemini_generation": f"{t_gemini - t_download:.2f}s",
+                "get_feishu_token": f"{t_token - t_gemini:.2f}s",
+                "upload_feishu": f"{t_upload - t_token:.2f}s",
+                "get_download_url": f"{t_url - t_upload:.2f}s",
+                "total": f"{t_url - t_start:.2f}s"
+            }
         }
         
     except HTTPException:
