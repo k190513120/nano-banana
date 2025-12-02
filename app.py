@@ -11,7 +11,7 @@ from typing import Optional
 app = FastAPI()
 
 # Version for deployment tracking
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 print(f"Starting application version {VERSION}")
 
 # Configuration
@@ -181,11 +181,14 @@ async def generate_image_endpoint(request: GenerateRequest):
         "generationConfig": {
             "responseModalities": ["IMAGE"],
             "imageConfig": {
-                "aspectRatio": final_aspect_ratio,
-                "imageSize": final_image_size
+                "aspectRatio": final_aspect_ratio
             }
         }
     }
+
+    # Only add imageSize for models that support it (not supported by gemini-2.5-flash-image)
+    if api_model != "gemini-2.5-flash-image":
+        payload["generationConfig"]["imageConfig"]["imageSize"] = final_image_size
     
     print(f"Requesting Gemini ({api_model})...")
     
