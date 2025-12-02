@@ -147,7 +147,7 @@ async def generate_image_endpoint(request: GenerateRequest):
         raise HTTPException(status_code=500, detail="Server Configuration Error: GEMINI_API_KEY is not set.")
 
     # Define model and URL
-    api_model = MODEL_MAPPING.get(request.model, "gemini-3-pro-image-preview")
+    api_model = MODEL_MAPPING.get(request.model, "gemini-2.5-flash-image")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model}:generateContent"
     
     headers = {
