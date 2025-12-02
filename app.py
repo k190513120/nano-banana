@@ -11,7 +11,7 @@ from typing import Optional
 app = FastAPI()
 
 # Version for deployment tracking
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 print(f"Starting application version {VERSION}")
 
 # Configuration
