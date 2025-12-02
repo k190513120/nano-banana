@@ -27,9 +27,9 @@ UPLOAD_PARENT_TYPE = "bitable_image"
 
 # Map user friendly model names to actual API models if needed
 MODEL_MAPPING = {
-    "nano banana1": "gemini-3-pro-image-preview",
+    "nano banana1": "gemini-2.5-flash-image",
     "nano banana2": "gemini-3-pro-image-preview", 
-    "default": "gemini-3-pro-image-preview"
+    "default": "gemini-2.5-flash-image"
 }
 
 class GenerateRequest(BaseModel):
