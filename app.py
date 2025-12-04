@@ -6,7 +6,7 @@ import zlib
 import time
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Union
 
 app = FastAPI()
 
@@ -37,8 +37,8 @@ class GenerateRequest(BaseModel):
     aspect_ratio: Optional[str] = None
     imageSize: Optional[str] = "1K"
     image_size: Optional[str] = None
-    imageUrl: Optional[str] = None
-    image: Optional[str] = None
+    imageUrl: Optional[Union[str, List[str]]] = None
+    image: Optional[Union[str, List[str]]] = None
     prompt: str
     model: str = "nano banana1"
 
@@ -162,14 +162,26 @@ async def generate_image_endpoint(request: GenerateRequest):
     parts = []
     
     # Normalize input fields (support snake_case aliases)
-    final_image_url = request.imageUrl or request.image
+    image_input = request.imageUrl or request.image
     final_aspect_ratio = request.aspectRatio or request.aspect_ratio or "1:1"
     final_image_size = request.imageSize or request.image_size or "1K"
     
-    if final_image_url:
-        print(f"Downloading image from {final_image_url[:30]}...")
-        image_data = download_image_as_base64(final_image_url)
-        parts.append({"inlineData": image_data})
+    if image_input:
+        urls_to_process = []
+        if isinstance(image_input, list):
+            urls_to_process = image_input
+        else:
+            urls_to_process = [image_input]
+            
+        for img_url in urls_to_process:
+            if img_url:
+                print(f"Downloading image from {img_url[:30]}...")
+                try:
+                    image_data = download_image_as_base64(img_url)
+                    parts.append({"inlineData": image_data})
+                except Exception as e:
+                    print(f"Warning: Failed to download image {img_url[:30]}...: {e}")
+                    # Continue with other images
         
     t_download = time.time()
     print(f"[Timing] Image Download: {t_download - t_start:.2f}s")
